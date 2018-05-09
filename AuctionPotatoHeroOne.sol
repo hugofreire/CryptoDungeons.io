@@ -6,6 +6,14 @@
 // - Potato Style 
 // - Redeem to Automate the hero transfer
 
+// based on Bryn Bellomy code
+// https://medium.com/@bryn.bellomy/solidity-tutorial-building-a-simple-auction-contract-fcc918b0878a
+// Some modifications :
+// - Added Partners
+// - Custom start
+// - Potato Style 
+// - Redeem to Automate the hero transfer
+
 pragma solidity ^0.4.21;
 
 /**
@@ -121,6 +129,7 @@ contract AuctionPotatoHeroOne {
         // owner can withdraw 
         if (msg.sender == owner || msg.sender == partner1 || msg.sender == partner2) {
             withdrawalAccount = msg.sender;
+            withdrawalAmount = balances[withdrawalAccount];
             // set funds to 0
             balances[withdrawalAccount] = 0;
         }
