@@ -14,6 +14,14 @@
 // - Potato Style 
 // - Redeem to Automate the hero transfer
 
+// based on Bryn Bellomy code
+// https://medium.com/@bryn.bellomy/solidity-tutorial-building-a-simple-auction-contract-fcc918b0878a
+// Some modifications :
+// - Added Partners
+// - Custom start
+// - Potato Style 
+// - Redeem to Automate the hero transfer
+
 pragma solidity ^0.4.21;
 
 /**
@@ -164,17 +172,18 @@ contract AuctionPotatoHeroOne {
         require(msg.value >= price && now < timeLimit);
         
             uint toAdd = msg.value.div(5); //20%
-            balances[highestBidder] = msg.value.sub(toAdd.div(2));// "send" to previous bidder 10% of highestBidd
+            uint toHighestBidder = msg.value.sub(toAdd.div(2));
+            balances[highestBidder] += toHighestBidder;// "send" to previous bidder 10% of highestBidd
             
             highestBidder = msg.sender; // set high bidder
             price = price.add(toAdd); // increase price
             
-            uint pt1share = toAdd.div(2).div(5); // add to partner1 20% of the bid increase
-            balances[partner1] = pt1share;
+            uint pt1share = toAdd.div(2).div(5); // add to partner1 20% of the bid profit
+            balances[partner1] += pt1share;
             uint pt2share = toAdd.div(2).div(10); // add to partner1 10% of the bid profit (10%)
-            balances[partner1] = pt2share;
+            balances[partner2] += pt2share;
             
-            balances[owner] = toAdd.div(2).sub(pt1share).sub(pt2share);
+            balances[owner] += msg.value.sub(toHighestBidder).sub(pt1share).sub(pt2share);
             timeLimit = now.add(timeToAdd);
             
             emit LogBid(msg.sender, price, timeLimit);
