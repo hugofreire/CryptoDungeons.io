@@ -1,10 +1,11 @@
 // based on Bryn Bellomy code
 // https://medium.com/@bryn.bellomy/solidity-tutorial-building-a-simple-auction-contract-fcc918b0878a
-// Some modifications :
-// - Added Partners
-// - Custom start
-// - Potato Style 
-// - Redeem to Automate the hero transfer
+//
+// updated to 0.4.21 standard, replaced blocks with time, converted to hot potato style by Chibi Fighters
+// added custom start command for owner so they don't take off immidiately
+//
+// added custom Redeem to Automate the hero transfer
+
 
 pragma solidity ^0.4.24;
 
@@ -56,56 +57,147 @@ library SafeMath {
     }
 }
 
-contract AuctionPotatoHeroOne {
+contract AuctionPotato {
+    using SafeMath for uint256; 
+    // static
     
-    using SafeMath for uint256;
     AbstractHeroSale m_HeroSale;
     address public owner;
+    address public partner1 = 0x9b974CadC31dBFec68B82bFB2127519AaC3257D3;
+    address public partner2 = 0xacce111753FcF50D77D2057A8527baBdD102F24E;
+    
+    uint public bidIncrement;
+    uint public startTime;
+    uint public endTime;
+    string public infoUrl;
+    string name;
+    
+    // start auction manually at given time
+    bool started;
+
+    // pototo
+    uint public potato;
     
     // state
     bool public canceled;
-    bool public started;
     
-    address public partner1 = 0x9b974CadC31dBFec68B82bFB2127519AaC3257D3;
-    address public partner2 = 0xacce111753FcF50D77D2057A8527baBdD102F24E;
+    uint public highestBindingBid;
     address public highestBidder;
     
-    string public infoUrl;
-    string name;
-    uint public heroID = 0;
-    uint public price = 10 finney;
-    uint public timeToAdd = 1 hours;
-    uint public timeLimit;
-    mapping (address => uint) public balances;
-    bool gameActive = false;
-    
-    event LogBid(address bidder, uint bid, uint newTime);
+    mapping(address => uint256) public fundsByBidder;
+    bool ownerHasWithdrawn;
+
+    event LogBid(address bidder, uint bid, address highestBidder, uint highestBindingBid);
     event LogWithdrawal(address withdrawer, address withdrawalAccount, uint amount);
     event LogCanceled();
     
-    modifier onlyOwner {
-        require(msg.sender == owner);
-        _;
-    }
     
-    modifier isWinner(){
-        require(msg.sender == highestBidder && now > timeLimit);
-        _;
-    }
-    
-    modifier isActive(){
-        require(gameActive);
-        _;
+    // initial settings on contract creation
+    constructor() public {
+
+        owner = msg.sender;
+        // 0.01 ETH
+        bidIncrement = 10000000000000000;
+        
+        started = false;
+        
+        name = "Hero Name";
+        infoUrl = "https://cryptodungeons.io";
+        
     }
 
-    function AuctionPotatoHeroOne() public {
-        owner = msg.sender;
-        highestBidder = msg.sender;
-        timeLimit = now.add(timeToAdd);
-        infoUrl = "https://cryptodungeons.io";
+    function getHighestBid() internal
+        constant
+        returns (uint)
+    {
+        return fundsByBidder[highestBidder];
     }
- 
-    function withdraw() public returns (bool success)
+    
+    function timeLeft() public view returns (uint time) {
+        if (now >= endTime) return 0;
+        return endTime - now;
+    }
+    
+    function auctionName() public view returns (string _name) {
+        return name;
+    }
+    
+    function nextBid() public view returns (uint _nextBid) {
+        return bidIncrement.add(highestBindingBid).add(potato);
+    }
+    
+    function startAuction(string _name, uint _duration_secs) public onlyOwner returns (bool success){
+        require(started == false);
+        
+        started = true;
+        startTime = now;
+        endTime = now + _duration_secs;
+        name = _name;
+        
+        return true;
+        
+    }
+    
+    function isStarted() public view returns (bool success) {
+        return started;
+    }
+
+    function placeBid() public
+        payable
+        onlyAfterStart
+        onlyBeforeEnd
+        onlyNotCanceled
+        onlyNotOwner
+        returns (bool success)
+    {   
+        // we are only allowing to increase in bidIncrements to make for true hot potato style
+        require(msg.value == highestBindingBid.add(bidIncrement).add(potato));
+        require(msg.sender != highestBidder);
+        require(started == true);
+        
+        // calculate the user's total bid based on the current amount they've sent to the contract
+        // plus whatever has been sent with this transaction
+        uint newBid = highestBindingBid.add(bidIncrement);
+
+        fundsByBidder[msg.sender] = fundsByBidder[msg.sender].add(newBid);
+        
+        fundsByBidder[highestBidder] = fundsByBidder[highestBidder].add(potato);
+        
+        // set new highest bidder
+        highestBidder = msg.sender;
+        highestBindingBid = newBid;
+        
+        // set new increment size
+        bidIncrement = bidIncrement.mul(5).div(4); 
+        
+        // 10% potato
+        potato = highestBindingBid.div(100).mul(20);
+        
+        emit LogBid(msg.sender, newBid, highestBidder, highestBindingBid);
+        return true;
+    }
+
+    function cancelAuction() public
+        onlyOwner
+        onlyBeforeEnd
+        onlyNotCanceled
+        returns (bool success)
+    {
+        canceled = true;
+        emit LogCanceled();
+        return true;
+    }
+    
+    function redeem() public isWinner isActive{
+        
+        m_HeroSale.forceTransfer(owner, highestBidder, heroID);
+        gameActive = false;
+            
+    }
+
+    function withdraw() public
+    // can withdraw once overbid
+        returns (bool success)
     {
         address withdrawalAccount;
         uint withdrawalAmount;
@@ -113,29 +205,47 @@ contract AuctionPotatoHeroOne {
         if (canceled) {
             // if the auction was canceled, everyone should simply be allowed to withdraw their funds
             withdrawalAccount = msg.sender;
-            withdrawalAmount = balances[withdrawalAccount];
+            withdrawalAmount = fundsByBidder[withdrawalAccount];
             // set funds to 0
-            balances[withdrawalAccount] = 0;
-        }else{
+            fundsByBidder[withdrawalAccount] = 0;
+        }
+        
+        // owner can withdraw once auction is cancelled or ended
+        //if (ownerHasWithdrawn == false && msg.sender == owner && (canceled == true || now > endTime)) {
+        if (msg.sender == owner || msg.sender == partner1 || msg.sender == partner2 ) {
             
-                 // owner can withdraw 
-                if (msg.sender == owner || msg.sender == partner1 || msg.sender == partner2) {
-                    withdrawalAccount = msg.sender;
-                    withdrawalAmount = balances[withdrawalAccount];
-                    // set funds to 0
-                    balances[withdrawalAccount] = 0;
-                }
-                
-                // overbid people can withdraw their bid + profit
-                // exclude owner because he is set above
-                if (!canceled && (msg.sender != highestBidder && msg.sender != owner)) {
-                    withdrawalAccount = msg.sender;
-                    withdrawalAmount = balances[withdrawalAccount];
-                    balances[withdrawalAccount] = 0;
-                }
+            uint pt1Share = highestBindingBid.div(2).div(5); // add to partner1 20% of the bid profit
+            uint pt2Share = highestBindingBid.div(2).div(10); // add to partner1 10% of the bid profit (10%)
+            
+            uint ownerShare += highestBindingBid.sub(pt1Share).sub(pt2Share);
+           
+            if (!partner1.send(pt1Share)) revert(); 
+            if (!partner2.send(pt2Share)) revert(); 
+            if (!owner.send(ownerShare)) revert(); 
+            
+            // set funds to 0
+            fundsByBidder[owner] = 0;
+            ownerHasWithdrawn = true;
+            
+            return true;
+            
             
         }
         
+        // overbid people can withdraw their bid + profit
+        // exclude owner because he is set above
+        if (!canceled && (msg.sender != highestBidder && msg.sender != owner)) {
+            withdrawalAccount = msg.sender;
+            withdrawalAmount = fundsByBidder[withdrawalAccount];
+            fundsByBidder[withdrawalAccount] = 0;
+        }
+
+        // highest bidder can withdraw leftovers if he didn't before
+        if (msg.sender == highestBidder && msg.sender != owner) {
+            withdrawalAccount = msg.sender;
+            withdrawalAmount = fundsByBidder[withdrawalAccount].sub(highestBindingBid);
+            fundsByBidder[withdrawalAccount] = fundsByBidder[withdrawalAccount].sub(withdrawalAmount);
+        }
 
         if (withdrawalAmount == 0) revert();
     
@@ -147,68 +257,44 @@ contract AuctionPotatoHeroOne {
         return true;
     }
     
-    
-    function bid() public isActive payable{
-        require(msg.value >= price && now < timeLimit);
+    // just in case the contract is bust and can't pay
+    function fuelContract() public onlyOwner payable {
         
-            uint toAdd = msg.value.div(5); //20%
-            uint toHighestBidder = msg.value.sub(toAdd.div(2));
-            balances[highestBidder] += toHighestBidder;// "send" to previous bidder 10% of highestBidd
-            
-            highestBidder = msg.sender; // set high bidder
-            price = price.add(toAdd); // increase price
-            
-            uint pt1share = toAdd.div(2).div(5); // add to partner1 20% of the bid profit
-            balances[partner1] += pt1share;
-            uint pt2share = toAdd.div(2).div(10); // add to partner1 10% of the bid profit (10%)
-            balances[partner2] += pt2share;
-            
-            balances[owner] += msg.value.sub(toHighestBidder).sub(pt1share).sub(pt2share);
-            timeLimit = now.add(timeToAdd);
-            
-            emit LogBid(msg.sender, price, timeLimit);
-            
     }
     
-    function getMinutesLeft() public view returns(uint minutesLeft){
-        if(timeLimit > now){
-             return (timeLimit - now).div(60 seconds);
-        }else{
-            return 0;
-        }
+    modifier isWinner(){
+        require(msg.sender == highestBidder && now > endTime);
+        _;
     }
     
-    function redeem() public isWinner isActive{
-        
-        m_HeroSale.forceTransfer(owner, highestBidder, heroID);
-        gameActive = false;
-            
-    }
-    
-    function cancelAuction() public
-        onlyOwner
-        returns (bool success)
-    {
-        canceled = true;
-        emit LogCanceled();
-        return true;
-    }
-    
-    function startAuction(uint _heroID,string _name, uint _duration_secs,address heroHelper) public onlyOwner returns (bool success){
-        require(started == false);
-        
-        
-        started = true;
-        gameActive = true;
-        timeLimit = now + _duration_secs;
-        name = _name;
-        heroID = _heroID;
-        AbstractHeroSale(heroHelper);
-        
-        return true;
-        
+    function balance() public view returns (uint _balance) {
+        return address(this).balance;
     }
 
+    modifier onlyOwner {
+        if (msg.sender != owner) revert();
+        _;
+    }
+
+    modifier onlyNotOwner {
+        if (msg.sender == owner) revert();
+        _;
+    }
+
+    modifier onlyAfterStart {
+        if (now < startTime) revert();
+        _;
+    }
+
+    modifier onlyBeforeEnd {
+        if (now > endTime) revert();
+        _;
+    }
+
+    modifier onlyNotCanceled {
+        if (canceled) revert();
+        _;
+    }
 }
 
 contract AbstractHeroSale
