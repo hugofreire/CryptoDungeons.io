@@ -73,7 +73,7 @@ contract AuctionPotatoHeroOne {
     string public infoUrl;
     string name;
     uint public heroID = 0;
-    uint public price = 1 finney;
+    uint public price = 10 finney;
     uint public timeToAdd = 1 hours;
     uint public timeLimit;
     mapping (address => uint) public balances;
@@ -116,30 +116,26 @@ contract AuctionPotatoHeroOne {
             withdrawalAmount = balances[withdrawalAccount];
             // set funds to 0
             balances[withdrawalAccount] = 0;
+        }else{
+            
+                 // owner can withdraw 
+                if (msg.sender == owner || msg.sender == partner1 || msg.sender == partner2) {
+                    withdrawalAccount = msg.sender;
+                    withdrawalAmount = balances[withdrawalAccount];
+                    // set funds to 0
+                    balances[withdrawalAccount] = 0;
+                }
+                
+                // overbid people can withdraw their bid + profit
+                // exclude owner because he is set above
+                if (!canceled && (msg.sender != highestBidder && msg.sender != owner)) {
+                    withdrawalAccount = msg.sender;
+                    withdrawalAmount = balances[withdrawalAccount];
+                    balances[withdrawalAccount] = 0;
+                }
+            
         }
         
-        // owner can withdraw 
-        if (msg.sender == owner || msg.sender == partner1 || msg.sender == partner2) {
-            withdrawalAccount = msg.sender;
-            withdrawalAmount = balances[withdrawalAccount];
-            // set funds to 0
-            balances[withdrawalAccount] = 0;
-        }
-        
-        // overbid people can withdraw their bid + profit
-        // exclude owner because he is set above
-        if (!canceled && (msg.sender != highestBidder && msg.sender != owner)) {
-            withdrawalAccount = msg.sender;
-            withdrawalAmount = balances[withdrawalAccount];
-            balances[withdrawalAccount] = 0;
-        }
-
-        // highest bidder can withdraw leftovers if he didn't before
-        if (msg.sender == highestBidder && msg.sender != owner) {
-            withdrawalAccount = msg.sender;
-            withdrawalAmount = balances[withdrawalAccount].sub(price);
-            balances[withdrawalAccount] = balances[withdrawalAccount].sub(withdrawalAmount);
-        }
 
         if (withdrawalAmount == 0) revert();
     
