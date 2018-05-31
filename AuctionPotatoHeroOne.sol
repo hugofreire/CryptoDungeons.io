@@ -6,23 +6,7 @@
 // - Potato Style 
 // - Redeem to Automate the hero transfer
 
-// based on Bryn Bellomy code
-// https://medium.com/@bryn.bellomy/solidity-tutorial-building-a-simple-auction-contract-fcc918b0878a
-// Some modifications :
-// - Added Partners
-// - Custom start
-// - Potato Style 
-// - Redeem to Automate the hero transfer
-
-// based on Bryn Bellomy code
-// https://medium.com/@bryn.bellomy/solidity-tutorial-building-a-simple-auction-contract-fcc918b0878a
-// Some modifications :
-// - Added Partners
-// - Custom start
-// - Potato Style 
-// - Redeem to Automate the hero transfer
-
-pragma solidity ^0.4.21;
+pragma solidity ^0.4.24;
 
 /**
 * @title SafeMath
@@ -204,6 +188,7 @@ contract AuctionPotatoHeroOne {
         gameActive = false;
             
     }
+    
     function cancelAuction() public
         onlyOwner
         returns (bool success)
