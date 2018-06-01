@@ -208,44 +208,47 @@ contract AuctionPotato {
             withdrawalAmount = fundsByBidder[withdrawalAccount];
             // set funds to 0
             fundsByBidder[withdrawalAccount] = 0;
+        }else{
+             // owner can withdraw once auction is cancelled or ended
+            //if (ownerHasWithdrawn == false && msg.sender == owner && (canceled == true || now > endTime)) {
+            if (msg.sender == owner || msg.sender == partner1 || msg.sender == partner2 ) {
+                
+                uint pt1Share = highestBindingBid.div(2).div(5); // add to partner1 20% of the bid profit
+                uint pt2Share = highestBindingBid.div(2).div(10); // add to partner1 10% of the bid profit (10%)
+                
+                uint ownerShare += highestBindingBid.sub(pt1Share).sub(pt2Share);
+               
+                if (!partner1.send(pt1Share)) revert(); 
+                if (!partner2.send(pt2Share)) revert(); 
+                if (!owner.send(ownerShare)) revert(); 
+                
+                // set funds to 0
+                fundsByBidder[owner] = 0;
+                ownerHasWithdrawn = true;
+                
+                return true;
+                
+                
+            }
+            
+            // overbid people can withdraw their bid + profit
+            // exclude owner because he is set above
+            if (!canceled && (msg.sender != highestBidder && msg.sender != owner)) {
+                withdrawalAccount = msg.sender;
+                withdrawalAmount = fundsByBidder[withdrawalAccount];
+                fundsByBidder[withdrawalAccount] = 0;
+            }
+    
+            // highest bidder can withdraw leftovers if he didn't before
+            if (msg.sender == highestBidder && msg.sender != owner) {
+                withdrawalAccount = msg.sender;
+                withdrawalAmount = fundsByBidder[withdrawalAccount].sub(highestBindingBid);
+                fundsByBidder[withdrawalAccount] = fundsByBidder[withdrawalAccount].sub(withdrawalAmount);
+            }
+            
         }
         
-        // owner can withdraw once auction is cancelled or ended
-        //if (ownerHasWithdrawn == false && msg.sender == owner && (canceled == true || now > endTime)) {
-        if (msg.sender == owner || msg.sender == partner1 || msg.sender == partner2 ) {
-            
-            uint pt1Share = highestBindingBid.div(2).div(5); // add to partner1 20% of the bid profit
-            uint pt2Share = highestBindingBid.div(2).div(10); // add to partner1 10% of the bid profit (10%)
-            
-            uint ownerShare += highestBindingBid.sub(pt1Share).sub(pt2Share);
-           
-            if (!partner1.send(pt1Share)) revert(); 
-            if (!partner2.send(pt2Share)) revert(); 
-            if (!owner.send(ownerShare)) revert(); 
-            
-            // set funds to 0
-            fundsByBidder[owner] = 0;
-            ownerHasWithdrawn = true;
-            
-            return true;
-            
-            
-        }
-        
-        // overbid people can withdraw their bid + profit
-        // exclude owner because he is set above
-        if (!canceled && (msg.sender != highestBidder && msg.sender != owner)) {
-            withdrawalAccount = msg.sender;
-            withdrawalAmount = fundsByBidder[withdrawalAccount];
-            fundsByBidder[withdrawalAccount] = 0;
-        }
-
-        // highest bidder can withdraw leftovers if he didn't before
-        if (msg.sender == highestBidder && msg.sender != owner) {
-            withdrawalAccount = msg.sender;
-            withdrawalAmount = fundsByBidder[withdrawalAccount].sub(highestBindingBid);
-            fundsByBidder[withdrawalAccount] = fundsByBidder[withdrawalAccount].sub(withdrawalAmount);
-        }
+       
 
         if (withdrawalAmount == 0) revert();
     
